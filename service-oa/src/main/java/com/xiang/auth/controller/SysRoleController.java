@@ -7,6 +7,7 @@ import com.xiang.auth.service.SysRoleService;
 import com.xiang.common.config.exception.MyException;
 import com.xiang.common.result.Result;
 import com.xiang.model.system.SysRole;
+import com.xiang.vo.system.AssignRoleVo;
 import com.xiang.vo.system.SysRoleQueryVo;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
@@ -16,6 +17,8 @@ import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 @Api(tags = "角色管理")
 @RestController
@@ -23,6 +26,20 @@ import java.util.List;
 public class SysRoleController {
     @Autowired
     private SysRoleService sysRoleService;
+
+    @ApiOperation("获取角色")
+    @GetMapping("/toAssign/{userId}")
+    public Result toAssign(@PathVariable Long userId) {
+        Map<String, Object> map = sysRoleService.findRoleDataByUserId(userId);
+        return Result.ok(map);
+    }
+
+    @ApiOperation("为用户分配角色")
+    @PostMapping("/doAssign")
+    public Result doAssign(@RequestBody AssignRoleVo assignRoleVo) {
+        sysRoleService.doAssign(assignRoleVo);
+        return Result.ok();
+    }
 
     @ApiOperation(value = "查询所有角色")
     @GetMapping("findAll")
@@ -70,7 +87,7 @@ public class SysRoleController {
     }
 
     @ApiOperation(value = "修改角色")
-    @PostMapping("update")
+    @PutMapping("update")
     public Result update(@RequestBody SysRole sysRole) {
         boolean update = sysRoleService.updateById(sysRole);
         if (update) {
