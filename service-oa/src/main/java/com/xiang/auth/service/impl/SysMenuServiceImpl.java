@@ -2,14 +2,23 @@ package com.xiang.auth.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.xiang.auth.mapper.SysMenuMapper;
+import com.xiang.auth.mapper.SysRoleMapper;
+import com.xiang.auth.mapper.SysRoleMenuMapper;
 import com.xiang.auth.service.SysMenuService;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.xiang.auth.service.SysRoleMenuService;
 import com.xiang.auth.utils.MenuHelper;
 import com.xiang.common.config.exception.MyException;
 import com.xiang.model.system.SysMenu;
+import com.xiang.model.system.SysRoleMenu;
+import com.xiang.vo.system.AssignMenuVo;
+import com.xiang.vo.system.RouterVo;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * <p>
@@ -21,6 +30,12 @@ import java.util.List;
  */
 @Service
 public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> implements SysMenuService {
+
+    @Autowired
+    private SysRoleMenuService sysRoleMenuService;
+
+    @Autowired
+    private SysRoleMenuMapper sysRoleMenuMapper;
 
     @Override
     public List<SysMenu> findNodes() {
@@ -39,5 +54,76 @@ public class SysMenuServiceImpl extends ServiceImpl<SysMenuMapper, SysMenu> impl
             throw new MyException(201,"无法删除菜单！");
         }
         baseMapper.deleteById(id);
+    }
+
+    @Override
+    public List<SysMenu> findSysMenuByRoleId(Long roleId) {
+        //查询所以status == 1的菜单
+        LambdaQueryWrapper<SysMenu> sysMenuWrapper = new LambdaQueryWrapper<>();
+        sysMenuWrapper.eq(SysMenu::getStatus,1);
+        List<SysMenu> allSysMenuList = baseMapper.selectList(sysMenuWrapper);
+
+        //根据roleId查询角色菜单表里roleId对应的菜单
+        LambdaQueryWrapper<SysRoleMenu> sysRoleMenuWrapper = new LambdaQueryWrapper<>();
+        sysRoleMenuWrapper.eq(SysRoleMenu::getRoleId, roleId);
+        List<SysRoleMenu> sysRoleMenuList = sysRoleMenuService.list(sysRoleMenuWrapper);
+
+        //获取菜单id
+        List<Long> menuIdList = sysRoleMenuList.stream().map(c -> c.getMenuId()).collect(Collectors.toList());
+
+        //菜单id与所有菜单id比对
+        allSysMenuList.stream().forEach(item -> {
+            if (menuIdList.contains(item.getId())) {
+                item.setSelect(true);
+            }
+        });
+
+        List<SysMenu> sysMenuList = MenuHelper.buildTree(allSysMenuList);
+        return sysMenuList;
+    }
+
+    @Override
+    public void doAssign(AssignMenuVo assignMenuVo) {
+        LambdaQueryWrapper<SysRoleMenu> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(SysRoleMenu::getRoleId,assignMenuVo.getRoleId());
+        sysRoleMenuService.remove(wrapper);
+
+        for (Long menuId : assignMenuVo.getMenuIdList()) {
+            if (StringUtils.isEmpty(menuId)) {
+                continue;
+            }
+
+            SysRoleMenu sysRoleMenu = new SysRoleMenu();
+            sysRoleMenu.setMenuId(menuId);
+            sysRoleMenu.setRoleId(assignMenuVo.getRoleId());
+            sysRoleMenuService.save(sysRoleMenu);
+        }
+    }
+
+    @Override
+    public List<RouterVo> findUserMenuListByUserId(Long userId) {
+        List<SysMenu> sysMenuList = null;
+        if (userId.longValue() == 1) {//规定userId == 1的时候为管理员
+            LambdaQueryWrapper<SysMenu> wrapper = new LambdaQueryWrapper<>();
+            wrapper.eq(SysMenu::getStatus,1).orderByAsc(SysMenu::getSortValue);
+            sysMenuList = baseMapper.selectList(wrapper);
+        } else {
+            sysMenuList = baseMapper.findUserMenuByUserId(userId);
+        }
+
+        //转化为树形结构
+        List<SysMenu> sysMenuListTree = MenuHelper.buildTree(sysMenuList);
+        //转化为框架需要的路由结构
+        List<RouterVo> routerVoList = this.buildRouter(sysMenuListTree);
+        return routerVoList;
+    }
+
+    private List<RouterVo> buildRouter(List<SysMenu> sysMenuListTree) {
+        return null;
+    }
+
+    @Override
+    public List<String> findUserPermsByUserId(Long userId) {
+        return null;
     }
 }
